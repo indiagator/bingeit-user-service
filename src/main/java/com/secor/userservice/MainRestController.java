@@ -17,6 +17,9 @@ public class MainRestController {
     @Autowired
     AuthService authService;
 
+    @Autowired
+    UserRepository userRepository;
+
     @PostMapping("/update/user/details") // will eventually move to user service
     public ResponseEntity<?> updateUserDetails(@RequestBody UserView userView,
                                                @RequestHeader("Authorization") String token)
