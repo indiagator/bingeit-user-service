@@ -1,4 +1,4 @@
-package com.secor.restroservice;
+package com.secor.userservice;
 
 import org.springframework.boot.test.context.SpringBootTest;
 

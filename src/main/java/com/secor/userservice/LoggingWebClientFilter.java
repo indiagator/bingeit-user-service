@@ -1,4 +1,4 @@
-package com.secor.restroservice;
+package com.secor.userservice;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
