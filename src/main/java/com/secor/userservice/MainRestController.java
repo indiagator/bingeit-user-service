@@ -24,30 +24,34 @@ public class MainRestController {
     public ResponseEntity<?> updateUserDetails(@RequestBody UserView userView,
                                                @RequestHeader("Authorization") String token)
     {
+        // STEP1: EXTRACTION OF PAYLOAD FROM INCOMING REQUESTS AND INJECTION OF BEANS IF ANY
+
+        // STEP2A: INTERACTION WITH DB AND THE CACHE AND DATA PROCESSING
+
+        // STEP2B: INTERACTION WITH OTHER SERVICES
+
+        log.info("Received request to update user details: {}", userView);
         if(authService.validateToken(token))
         {
-            if(userRepository.existsById(userView.getUsername()))
-            {
-                User user = userRepository.findById(userView.getUsername()).get();
+            log.info("Token is valid: {}", token);
 
+                User user = new User();
+                user.setUsername(userView.getUsername());
                 user.setFullname(userView.getFullname());
                 user.setEmail(userView.getEmail());
                 user.setPhone(userView.getPhone());
                 user.setRegion(userView.getRegion());
                 userRepository.save(user);
+                log.info("User updated: {}", user);
                 return ResponseEntity.ok(user);
-            }
-            else {
-                return ResponseEntity.notFound().build();
-            }
         }
         else
         {
+            log.info("Token is invalid: {}", token);
             return ResponseEntity.status(401).build();
         }
 
-
-
+        // STEP3: RETURN THE RESPONSE FINAL OR INTERIM
     }
 
 

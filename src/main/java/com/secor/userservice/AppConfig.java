@@ -5,17 +5,14 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.reactive.function.client.WebClient;
 
 @Configuration
-public class AppConfig {
-
-
+public class AppConfig
+{
     @Bean(name = "auth-service-validate")
     public WebClient webClientAuthService(WebClient.Builder webClientBuilder)
     {
         return webClientBuilder
-                .baseUrl("http://localhost:8082/api/v1/validate")
+                .baseUrl("http://localhost:8093/api/v1/validate") // hardcoding hostname and portnumber
                 .filter(new LoggingWebClientFilter())
                 .build();
     }
-
-
 }

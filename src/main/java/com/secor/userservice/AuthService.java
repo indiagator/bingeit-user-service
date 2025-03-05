@@ -22,11 +22,14 @@ public class AuthService
 
         log.info("Validating token within the AuthService: {}", token);
         log.info("Sending request to auth service to validate token: {}", token);
-        String response = webClient.get()
-                .header("Authorization", token)
-                .retrieve()
-                .bodyToMono(String.class).block(); // Current Thread will pause till the final response comes back
+
+        String response =  webClient.get()
+                                    .header("Authorization", token)
+                                    .retrieve()
+                                    .bodyToMono(String.class).block(); // Current Thread will pause till the final response comes back | SYNC |
+
         log.info("Response from auth service: {}", response);
+
         return response.equalsIgnoreCase("valid");
     }
 }
