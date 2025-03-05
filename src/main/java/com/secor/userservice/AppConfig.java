@@ -7,6 +7,8 @@ import org.springframework.web.reactive.function.client.WebClient;
 @Configuration
 public class AppConfig
 {
+
+
     @Bean(name = "auth-service-validate")
     public WebClient webClientAuthService(WebClient.Builder webClientBuilder)
     {
@@ -15,4 +17,16 @@ public class AppConfig
                 .filter(new LoggingWebClientFilter())
                 .build();
     }
+
+    @Bean(name = "plain-old-web-client")
+    public WebClient webClientSubService(WebClient.Builder webClientBuilder)
+    {
+        return webClientBuilder
+                .filter(new LoggingWebClientFilter())
+                .build();
+    }
+
+
+
+
 }
