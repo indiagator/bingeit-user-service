@@ -22,26 +22,26 @@ public class SubService
     RedisTemplate<String, Object> redisTemplate;
 
     @Autowired
-    @Qualifier("plain-old-web-client")
+    @Qualifier("sub-service-create-sub")
     WebClient webClient;
 
     public String createSub(MultiUserView multiUserView,
                             String planid,
                             String token)
         {
+            log.info("Creating subscription for plan: {}", planid);
 
             Mono<String> subServiceResponse = webClient.post()
-                    .uri(uriBuilder -> uriBuilder.path("http://localhost:8102/api/v1/create/subs/{planid}")
-                            .build(planid))
                     .header("Authorization", token)
                     .body(BodyInserters.fromValue(multiUserView))
                     .retrieve()
                     .bodyToMono(String.class); // This is an Async Request
 
+            log.info("Sub Service Response: "+subServiceResponse);
             String responseKey = String.valueOf(new Random().nextInt(1000)); // this is the key that we will return from this method
 
+            log.info("Response Key: "+responseKey);
             redisTemplate.opsForValue().set(responseKey,"stage1 complete");
-
 
             /// SETUP A HANDLER FOR THE EVENTUAL RESPONSE
             subServiceResponse.subscribe(
@@ -59,9 +59,8 @@ public class SubService
                     });
             /// END OF HANDLER
 
-
+            log.info("Returning Response Key: "+responseKey);
             return responseKey; // Interim Response
-
         }
 
 }
