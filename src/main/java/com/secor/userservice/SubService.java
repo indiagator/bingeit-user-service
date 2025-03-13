@@ -5,11 +5,15 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.BodyInserters;
+import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 @Service
@@ -31,11 +35,11 @@ public class SubService
         {
             log.info("Creating subscription for plan: {}", planid);
 
-            Mono<String> subServiceResponse = webClient.post()
+            Mono<ClientResponse> subServiceResponse = webClient.post()
                     .header("Authorization", token)
-                    .body(BodyInserters.fromValue(multiUserView))
-                    .retrieve()
-                    .bodyToMono(String.class); // This is an Async Request
+                    .body(BodyInserters.fromValue(multiUserView)).
+                    exchangeToMono(clientResponse1 -> Mono.just(clientResponse1));
+
 
             log.info("Sub Service Response: "+subServiceResponse);
             String responseKey = String.valueOf(new Random().nextInt(1000)); // this is the key that we will return from this method
@@ -45,17 +49,25 @@ public class SubService
 
             /// SETUP A HANDLER FOR THE EVENTUAL RESPONSE
             subServiceResponse.subscribe(
-                    (response) ->
+                    clientResponse ->
                     {
-                        log.info(response+" from the sub service");
-                        // MENU CREATION LOGIC TO BE IMPLEMENTED HERE
-                        // AND PUT THE RESPONSE IN REDIS
-                        redisTemplate.opsForValue().set(responseKey,"subresponse "+response);
-                    },
-                    error ->
-                    {
-                        log.info("error processing the response "+error.getMessage());
-                        redisTemplate.opsForValue().set(responseKey,"error "+error.getMessage());
+                        clientResponse.bodyToMono(String.class).subscribe(responseBody -> {
+                            log.info("Response from the sub service: {}", responseBody);
+                            // Extract cookies from the response
+                            clientResponse.cookies().entrySet().stream()
+                                    .filter(stringListEntry -> stringListEntry.getKey().equals("sub-service-stage-2"))
+                                    .findFirst()
+                                    .ifPresent(cookieEntry -> {
+                                        // Menu creation logic to be implemented here
+                                        // And put the response in Redis
+                                        redisTemplate.opsForValue().set(responseKey, "subresponse " + responseBody + " " + cookieEntry.getValue().stream().findFirst());
+                                    });
+                        },
+                                error ->
+                                {
+                                    log.info("error processing the response "+error.getMessage());
+                                    redisTemplate.opsForValue().set(responseKey,"error "+error.getMessage());
+                                });
                     });
             /// END OF HANDLER
 
