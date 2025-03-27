@@ -14,6 +14,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Random;
 
 @RestController
@@ -79,6 +80,8 @@ public class MainRestController {
                                                HttpServletResponse response)
         {
 
+            log.info("endpoint : subscribe/plan/{} invoked", planid);
+
             // COOKIE VALIDATION LOGIC
             List<Cookie> cookieList = null;
             log.info("initiating cookie check");
@@ -96,9 +99,10 @@ public class MainRestController {
             }
             log.info("cookie check complete");
 
-            if( cookieList.stream().filter(cookie -> cookie.getName().equals("user-service-sub-stage-1")).findAny().isEmpty()) // COOKIE_CHECK
+            if( cookieList.stream().findAny().isEmpty()) // COOKIE_CHECK
             {
-                log.info("Received request to subscribe to plan: {}", multiUserView);
+                log.info("no relevant cookie found.. initiating fresh request logic");
+                log.info("Request forwarded to Auth-Service for Token Validation {} ", token);
                 if(authService.validateToken(token))
                 {
 
@@ -108,23 +112,25 @@ public class MainRestController {
 
                     // forward the request to the sub service to activate the plan for all the associated users
                     // this step can take some time to get executed
-
+                    log.info("Token is valid: {}", token);
                     log.info("Received request to subscribe to plan: {}", planid);
                     String responseKey = subService.createSub(multiUserView, planid, token);
+                    log.info("Response Key generated: {}", responseKey);
 
                     // inform the front end that the request has been accepted and is being processed
 
                     //exit
 
-                    log.info("Setting up the Cookie for the Front-end");
+                    log.info("Setting up the Cookie for the Front-end with the response key {} as the cookieValue", responseKey);
                     Cookie cookieStage1 = new Cookie("user-service-sub-stage-1", responseKey);
-                    cookieStage1.setMaxAge(120);
-                    log.info("Cookie set up successfully");
+                    cookieStage1.setMaxAge(600);
+                    log.info("Cookie set up successfully with name {} and value {}", cookieStage1.getName(), cookieStage1.getValue());
 
                     response.addCookie(cookieStage1);
 
-                    return ResponseEntity.ok().header("traceparent", traceparent).body("Subscription request accepted and is being processed");
+                    log.info("Sending back the response to the Front-end with the Cookie as above");
 
+                    return ResponseEntity.ok().header("traceparent", traceparent).body("Subscription request accepted and is being processed");
                 }
                 else
                 {
@@ -134,11 +140,41 @@ public class MainRestController {
 
 
             }
-            else if( cookieList.stream().filter(cookie -> cookie.getName().equals("user-service-sub-stage-1")).findAny().isPresent()) // COOKIE_CHECK
-
+            else if( cookieList.stream().filter(cookie -> cookie.getName().equals("sub-service-stage-2")).findAny().isPresent())
             {
                 // FOLLOW UP LOGIC
-                log.info("found a relevant cookie.. initiating follow up logic");
+                log.info("found a relevant cookie..{} initiating follow up logic","sub-service-stage-2");
+                log.info("initiating follow up logic for the second cookie!");
+                Cookie followup_cookie =  cookieList.stream().
+                        filter(cookie -> cookie.getName().equals("sub-service-stage-2")).findAny().get();
+
+                String followup_cookie_key = followup_cookie.getValue();
+                String cacheResponse = (String)redisTemplate.opsForValue().get(followup_cookie_key);
+                log.info("Fetched the response from the cache which is updated by Sub-Service: {}", cacheResponse);
+
+                String[] cacheResponseArray = cacheResponse.split(" ");
+
+
+                if(cacheResponseArray[0].equals("stage2"))
+                {
+                    log.info("Payment Creation  still under process...");
+
+                    return ResponseEntity.ok("Payment Creation  still under process...");
+                }
+                else if(cacheResponseArray[0].equals("payresponse"))
+                {
+                    log.info("transaction completed successfully with PaymentID: {}", cacheResponseArray[1]);
+                    return ResponseEntity.ok("PaymentID: "+cacheResponseArray[1]);
+                }
+                else
+                {
+                    return ResponseEntity.ok("Error Processing the Order");
+                }
+            }// COOKIE_CHECK
+            else if( cookieList.stream().filter(cookie -> cookie.getName().equals("user-service-sub-stage-1")).findAny().isPresent()) // COOKIE_CHECK
+            {
+                // FOLLOW UP LOGIC
+                log.info("found a relevant cookie.. {} initiating follow up logic","user-service-sub-stage-1");
 
                 Cookie followup_cookie =  cookieList.stream().
                         filter(cookie -> cookie.getName().equals("user-service-sub-stage-1")).findAny().get();
@@ -156,12 +192,14 @@ public class MainRestController {
                 }
                 else if(cacheResponseArray[0].equals("subresponse"))
                 {
+                    log.info("Cache was updated by the ASYNC HANDLER with the response from the Sub-Service");
                     log.info("Setting up the Cookie for the Front-end stage 2");
-                    Cookie cookieStage2 = new Cookie("user-service-sub-stage-2", cacheResponseArray[2]);
-                    cookieStage2.setMaxAge(120);
-                    log.info("Cookie set up successfully");
+                    Cookie cookieStage2 = new Cookie(cacheResponseArray[1], cacheResponseArray[2]);
+                    cookieStage2.setMaxAge(600);
+                    log.info("Cookie set up successfully {} {}", cookieStage2.getName(), cookieStage2.getValue());
+                    log.info("FIRST FOLLOW_UP SUCCESS");
                     response.addCookie(cookieStage2);
-                    return ResponseEntity.ok(cacheResponseArray[1]);
+                    return ResponseEntity.ok("Subscription Created and Payment Creation in Progress");
                 }
                 else
                 {
@@ -170,35 +208,6 @@ public class MainRestController {
 
 
             }
-            else if( cookieList.stream().filter(cookie -> cookie.getName().equals("user-service-sub-stage-2")).findAny().isPresent())
-            {
-                // FOLLOW UP LOGIC
-                log.info("found a relevant cookie.. initiating follow up logic");
-
-                Cookie followup_cookie =  cookieList.stream().
-                        filter(cookie -> cookie.getName().equals("user-service-sub-stage-2")).findAny().get();
-
-                String followup_cookie_key = followup_cookie.getValue();
-                String cacheResponse = (String)redisTemplate.opsForValue().get(followup_cookie_key);
-
-                String[] cacheResponseArray = cacheResponse.split(" ");
-
-
-                if(cacheResponseArray[0].equals("stage2"))
-                {
-                    log.info("Payment Creation  still under process...");
-
-                    return ResponseEntity.ok("Payment Creation  still under process...");
-                }
-                else if(cacheResponseArray[0].equals("payresponse"))
-                {
-                    return ResponseEntity.ok("PaymentID: "+cacheResponseArray[1]);
-                }
-                else
-                {
-                    return ResponseEntity.ok("Error Processing the Order");
-                }
-            }// COOKIE_CHECK
             else
             {
                 return ResponseEntity.ok("Error Processing the Order");
@@ -207,7 +216,21 @@ public class MainRestController {
 
         }
 
+        @GetMapping("/get/user/{username}")
+        public ResponseEntity<?> getUser(@PathVariable("username") String username)
+        {
+            Optional<User> user = userRepository.findById(username);
 
+            if(user.isPresent())
+            {
+                return ResponseEntity.ok(user);
+            }
+            else
+            {
+                return ResponseEntity.status(404).body("User not found");
+            }
+
+        }
 
 
 

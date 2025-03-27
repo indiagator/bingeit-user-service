@@ -5,21 +5,16 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
-
-import java.util.List;
-import java.util.Map;
 import java.util.Random;
 
 @Service
 public class SubService
 {
-
     private static final Logger log = LoggerFactory.getLogger(SubService.class);
 
     @Autowired
@@ -33,45 +28,31 @@ public class SubService
                             String planid,
                             String token)
         {
-            log.info("Creating subscription for plan: {}", planid);
+            log.info("SubService inside User-Service invoked | Creating subscription for plan: {}", planid);
+            log.info("Request forwarded to the SubService with Payload:  "+multiUserView);
 
-            Mono<ClientResponse> subServiceResponse = webClient.post()
+            Mono<String> subServiceResponse = webClient.post()
                     .header("Authorization", token)
                     .body(BodyInserters.fromValue(multiUserView)).
-                    exchangeToMono(clientResponse1 -> Mono.just(clientResponse1));
+                   retrieve().bodyToMono(String.class);
 
-
-            log.info("Sub Service Response: "+subServiceResponse);
             String responseKey = String.valueOf(new Random().nextInt(1000)); // this is the key that we will return from this method
 
-            log.info("Response Key: "+responseKey);
+            log.info("Response Key generated within the SubService of User-Service: "+responseKey);
             redisTemplate.opsForValue().set(responseKey,"stage1 complete");
+            log.info("Response Key {} saved in Redis with the value stage1 complete",responseKey);
 
-            /// SETUP A HANDLER FOR THE EVENTUAL RESPONSE
-            subServiceResponse.subscribe(
-                    clientResponse ->
-                    {
-                        clientResponse.bodyToMono(String.class).subscribe(responseBody -> {
-                            log.info("Response from the sub service: {}", responseBody);
-                            // Extract cookies from the response
-                            clientResponse.cookies().entrySet().stream()
-                                    .filter(stringListEntry -> stringListEntry.getKey().equals("sub-service-stage-2"))
-                                    .findFirst()
-                                    .ifPresent(cookieEntry -> {
-                                        // Menu creation logic to be implemented here
-                                        // And put the response in Redis
-                                        redisTemplate.opsForValue().set(responseKey, "subresponse " + responseBody + " " + cookieEntry.getValue().stream().findFirst());
-                                    });
-                        },
-                                error ->
-                                {
-                                    log.info("error processing the response "+error.getMessage());
-                                    redisTemplate.opsForValue().set(responseKey,"error "+error.getMessage());
-                                });
-                    });
-            /// END OF HANDLER
+           subServiceResponse.subscribe(response ->
+                   {
+                        log.info("ASYNC HANDLER in User-Service INVOKED with response {} from Sub-Service",response);
+                        redisTemplate.opsForValue().set(responseKey, response);
+                        log.info("Response Key {} UPDATE IN REDIS with the final response {}", responseKey,response);
+                    },
+                   error ->{
+                    log.info("Error from the SubService: "+error.getMessage());
+                });
 
-            log.info("Returning Response Key: "+responseKey);
+            log.info("Returning Response Key from the SubService within User-Service after setting up the AYNC HANDLER: "+responseKey);
             return responseKey; // Interim Response
         }
 
